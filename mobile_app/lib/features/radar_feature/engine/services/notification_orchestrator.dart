@@ -15,7 +15,7 @@ class NotificationOrchestrator {
     const ios = DarwinInitializationSettings();
 
     await _plugin.initialize(
-      const InitializationSettings(android: android, iOS: ios),
+      settings: const InitializationSettings(android: android, iOS: ios),
     );
 
     const androidChannel = AndroidNotificationChannel(
@@ -57,10 +57,10 @@ class NotificationOrchestrator {
     );
 
     await _plugin.show(
-      _stableId(radarId),
-      title,
-      body,
-      details,
+      id: _stableId(radarId),
+      title: title,
+      body: body,
+      notificationDetails: details,
       payload: radarId,
     );
   }
