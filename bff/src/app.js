@@ -22,7 +22,7 @@ app.use(
       return callback(new Error('Origin not allowed by CORS policy'));
     },
     methods: ['POST', 'GET', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-Id'],
     optionsSuccessStatus: 204,
     credentials: false,
     maxAge: 86400,

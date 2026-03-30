@@ -161,6 +161,16 @@ flutter pub get
 flutter run --dart-define=APP_ENV=dev --dart-define=BFF_BASE_URL=http://<LOCAL_IP>:3000
 ```
 
+> Önemli: APK'yı manuel kurarken (`flutter build apk` + `adb install`) `--dart-define=BFF_BASE_URL=...` verilmezse uygulama dev fallback olarak `http://localhost:3000` kullanır. Fiziksel telefonda bu adres backend'e gitmez ve "Ağ bağlantısı yok, istek kuyruğa alındı" hatası görülür.
+
+Manuel APK için doğru örnek:
+
+```bash
+cd /Users/admin/Desktop/antiradar/mobile_app
+flutter build apk --debug --dart-define=APP_ENV=dev --dart-define=BFF_BASE_URL=http://<LOCAL_IP>:3000
+adb install -r build/app/outputs/flutter-apk/app-debug.apk
+```
+
 ### Web için Google Maps key (lokal, repoya girmez)
 
 `web/maps_api_key.local.js` dosyası oluştur:
@@ -170,6 +180,24 @@ window.GMAPS_WEB_API_KEY = 'YOUR_BROWSER_RESTRICTED_KEY';
 ```
 
 Örnek dosya: `web/maps_api_key.local.js.example`
+
+### Android için Google Maps key (web key'den farklı olmalı)
+
+Mobilde beyaz harita görüyorsan en yaygın neden Android key kısıtlarıdır.
+
+- Google Cloud'da **Maps SDK for Android** aktif olmalı.
+- Key, **Application restrictions = Android apps** olacak şekilde kısıtlanmalı.
+- Android paket adı: `com.example.antiradar_mobile_app`
+- Debug SHA1 (bu projede yerel debug keystore):
+  - `7D:EC:A3:36:F0:03:07:5E:84:31:EE:4F:27:CF:5E:15:65:6E:14:0B`
+
+`android/local.properties` içine:
+
+```properties
+MAPS_API_KEY=YOUR_ANDROID_RESTRICTED_KEY
+```
+
+> Not: `web/maps_api_key.local.js` içindeki browser key ile Android key aynı olmak zorunda değil; çoğu kurulumda ayrı tutulur.
 
 ### 4) Örnek profile komutları
 
