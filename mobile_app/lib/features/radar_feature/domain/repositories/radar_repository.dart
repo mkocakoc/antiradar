@@ -8,5 +8,6 @@ abstract interface class RadarRepository {
     required String fromDistrict,
     required String toDistrict,
     bool forceRefresh = false,
+    String? requestId,
   });
 }

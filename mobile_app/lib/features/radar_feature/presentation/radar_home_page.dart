@@ -421,7 +421,7 @@ class _RadarHomePageState extends State<RadarHomePage> {
                                 children: [
                                   const SizedBox(height: 8),
                                   DropdownButtonFormField<_CityOption>(
-                                    value: _fromCity,
+                                    initialValue: _fromCity,
                                     decoration: const InputDecoration(labelText: 'Nereden - İl'),
                                     isExpanded: true,
                                     items: _cities
@@ -436,7 +436,7 @@ class _RadarHomePageState extends State<RadarHomePage> {
                                   ),
                                   const SizedBox(height: 8),
                                   DropdownButtonFormField<_DistrictOption>(
-                                    value: _fromDistrict,
+                                    initialValue: _fromDistrict,
                                     decoration: const InputDecoration(labelText: 'Nereden - İlçe'),
                                     isExpanded: true,
                                     items: _fromDistricts
@@ -455,7 +455,7 @@ class _RadarHomePageState extends State<RadarHomePage> {
                                   ),
                                   const SizedBox(height: 8),
                                   DropdownButtonFormField<_CityOption>(
-                                    value: _toCity,
+                                    initialValue: _toCity,
                                     decoration: const InputDecoration(labelText: 'Nereye - İl'),
                                     isExpanded: true,
                                     items: _cities
@@ -470,7 +470,7 @@ class _RadarHomePageState extends State<RadarHomePage> {
                                   ),
                                   const SizedBox(height: 8),
                                   DropdownButtonFormField<_DistrictOption>(
-                                    value: _toDistrict,
+                                    initialValue: _toDistrict,
                                     decoration: const InputDecoration(labelText: 'Nereye - İlçe'),
                                     isExpanded: true,
                                     items: _toDistricts
@@ -494,7 +494,7 @@ class _RadarHomePageState extends State<RadarHomePage> {
                                         child: FilledButton.icon(
                                           onPressed: _isFormLoading ? null : _onSubmitRoute,
                                           icon: const Icon(Icons.radar_rounded),
-                                          label: const Text('Radarı Getir'),
+                                          label: const Text('Denetim Verisini Getir'),
                                         ),
                                       ),
                                     ],
@@ -517,7 +517,7 @@ class _RadarHomePageState extends State<RadarHomePage> {
                                     ),
                                     const SizedBox(width: 8),
                                     _buildCountBadge(
-                                      label: '${state.data.speedTunnels.length} Koridor',
+                                      label: '${state.data.speedTunnels.length} EDS/Koridor',
                                       color: const Color(0xFF0EA5E9),
                                       onTap: () => setState(() => _isRoutePanelExpanded = true),
                                     ),
@@ -588,8 +588,8 @@ class _RadarHomePageState extends State<RadarHomePage> {
 
   Widget _buildResultHint(BuildContext context, RadarState state) {
     if (state.status == RadarLoadStatus.loading) {
-      return Row(
-        children: const [
+      return const Row(
+        children: [
           SizedBox(
             width: 14,
             height: 14,
@@ -604,8 +604,23 @@ class _RadarHomePageState extends State<RadarHomePage> {
     if (state.status == RadarLoadStatus.success) {
       final tunnelCount = state.data.speedTunnels.length;
       final radarCount = state.data.radars.length;
+
+      if (radarCount == 0 && tunnelCount > 0) {
+        return Text(
+          'Sonuç: $tunnelCount EDS/hız koridoru bulundu, radar noktası bulunamadı.',
+          style: const TextStyle(color: Color(0xFFFCD34D), fontWeight: FontWeight.w600),
+        );
+      }
+
+      if (radarCount > 0 && tunnelCount == 0) {
+        return Text(
+          'Sonuç: $radarCount radar noktası bulundu, EDS/hız koridoru bulunamadı.',
+          style: const TextStyle(color: Color(0xFF86EFAC), fontWeight: FontWeight.w600),
+        );
+      }
+
       return Text(
-        'Sonuç: $tunnelCount hız koridoru, $radarCount radar noktası',
+        'Sonuç: $tunnelCount EDS/hız koridoru, $radarCount radar noktası',
         style: const TextStyle(color: Color(0xFF86EFAC), fontWeight: FontWeight.w600),
       );
     }

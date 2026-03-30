@@ -31,6 +31,7 @@ class RadarRepositoryImpl implements RadarRepository {
     required String fromDistrict,
     required String toDistrict,
     bool forceRefresh = false,
+    String? requestId,
   }) async {
     final cacheKey = '${fromDistrict.trim().toLowerCase()}::${toDistrict.trim().toLowerCase()}';
 
@@ -45,6 +46,7 @@ class RadarRepositoryImpl implements RadarRepository {
       final payload = await _fetchWithRetry(
         fromDistrict: fromDistrict,
         toDistrict: toDistrict,
+        requestId: requestId,
       );
 
       final success = payload['success'] == true;
@@ -130,6 +132,7 @@ class RadarRepositoryImpl implements RadarRepository {
   Future<Map<String, dynamic>> _fetchWithRetry({
     required String fromDistrict,
     required String toDistrict,
+    String? requestId,
   }) async {
     var attempt = 0;
     DioException? lastError;
@@ -139,6 +142,7 @@ class RadarRepositoryImpl implements RadarRepository {
         return await _remoteDataSource.fetchRoute(
           fromDistrict: fromDistrict,
           toDistrict: toDistrict,
+          requestId: requestId,
         );
       } on DioException catch (error) {
         lastError = error;

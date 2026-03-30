@@ -7,8 +7,32 @@ import {
   fetchRouteFromIcisleri,
 } from '../services/icisleri.service.js';
 import { transformRouteResponse } from '../transformers/route-transformer.js';
+import { emitLog } from '../logger.js';
 
 const routeRouter = Router();
+
+const logRouteTelemetry = ({
+  requestId,
+  durationMs,
+  resultType,
+  fromDistrict,
+  toDistrict,
+  radarCount,
+  speedTunnelCount,
+  errorCode,
+}) => {
+  emitLog({
+    eventName: 'route_request_completed',
+    requestId,
+    durationMs,
+    resultType,
+    fromDistrict,
+    toDistrict,
+    radarCount,
+    speedTunnelCount,
+    errorCode,
+  });
+};
 
 routeRouter.get('/cities', async (_req, res, next) => {
   try {
@@ -48,6 +72,7 @@ routeRouter.get('/districts', async (req, res, next) => {
 routeRouter.post('/route', async (req, res, next) => {
   const fromDistrict = String(req.body?.fromDistrict ?? '').trim();
   const toDistrict = String(req.body?.toDistrict ?? '').trim();
+  req.routeTelemetry = { fromDistrict, toDistrict };
 
   if (!fromDistrict || !toDistrict) {
     return next(
@@ -67,6 +92,17 @@ routeRouter.post('/route', async (req, res, next) => {
     const transformed = transformRouteResponse(rawResponse);
 
     if (!transformed.speedTunnels.length && !transformed.radars.length) {
+      logRouteTelemetry({
+        requestId: req.requestId,
+        durationMs: Date.now() - (req.requestStartedAt ?? Date.now()),
+        resultType: 'empty',
+        fromDistrict,
+        toDistrict,
+        radarCount: 0,
+        speedTunnelCount: 0,
+        errorCode: 'EMPTY_DATA',
+      });
+
       return res.status(200).json({
         success: false,
         error: {
@@ -80,6 +116,18 @@ routeRouter.post('/route', async (req, res, next) => {
         data: buildEmptyState(),
       });
     }
+
+    logRouteTelemetry({
+      requestId: req.requestId,
+      durationMs: Date.now() - (req.requestStartedAt ?? Date.now()),
+      resultType: 'success',
+      fromDistrict,
+      toDistrict,
+      radarCount: transformed.summary?.radarCount ?? transformed.radars.length,
+      speedTunnelCount:
+        transformed.summary?.speedTunnelCount ?? transformed.speedTunnels.length,
+      errorCode: null,
+    });
 
     return res.status(200).json({
       success: true,

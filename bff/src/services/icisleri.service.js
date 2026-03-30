@@ -42,55 +42,85 @@ const districtsCache = new Map();
 
 const cacheTtlMs = 30 * 60 * 1000;
 
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const shouldRetryStatus = (statusCode) => statusCode >= 500;
+
 const requestText = async (url, options) => {
-  let response;
+  const maxAttempts = Math.max(1, env.upstreamRetryCount + 1);
+  let lastNetworkErrorMessage = null;
+  let lastRetryableStatus = null;
 
-  try {
-    response = await request(url, {
-      ...options,
-      dispatcher: upstreamAgent,
-      bodyTimeout: env.upstreamTimeoutMs,
-      headersTimeout: env.upstreamTimeoutMs,
-    });
-  } catch (error) {
-    throw new AppError('İçişleri servisine erişilemedi.', {
-      statusCode: 502,
-      code: 'UPSTREAM_UNREACHABLE',
-      details: error.message,
-    });
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    let response;
+
+    try {
+      response = await request(url, {
+        ...options,
+        dispatcher: upstreamAgent,
+        bodyTimeout: env.upstreamTimeoutMs,
+        headersTimeout: env.upstreamTimeoutMs,
+      });
+    } catch (error) {
+      lastNetworkErrorMessage = error.message;
+
+      if (attempt < maxAttempts) {
+        await sleep(env.upstreamRetryDelayMs);
+        continue;
+      }
+
+      throw new AppError('İçişleri servisine erişilemedi.', {
+        statusCode: 502,
+        code: 'UPSTREAM_UNREACHABLE',
+        details: `attempts=${attempt}, reason=${error.message}`,
+      });
+    }
+
+    const text = await response.body.text();
+
+    if (shouldRetryStatus(response.statusCode)) {
+      lastRetryableStatus = response.statusCode;
+
+      if (attempt < maxAttempts) {
+        await sleep(env.upstreamRetryDelayMs);
+        continue;
+      }
+
+      throw new AppError('İçişleri servisi geçici olarak hata veriyor.', {
+        statusCode: 502,
+        code: 'UPSTREAM_500',
+        details: `status=${response.statusCode}, attempts=${attempt}`,
+      });
+    }
+
+    if (response.statusCode >= 300) {
+      throw new AppError('İçişleri servisi isteği yönlendirdi/engelledi.', {
+        statusCode: 502,
+        code: 'UPSTREAM_REDIRECTED',
+        details: `status=${response.statusCode}${response.headers?.location ? `, location=${response.headers.location}` : ''}`,
+      });
+    }
+
+    if (response.statusCode >= 400) {
+      throw new AppError('İçişleri servisi isteği reddetti.', {
+        statusCode: 502,
+        code: 'UPSTREAM_4XX',
+        details: `status=${response.statusCode}`,
+      });
+    }
+
+    return {
+      text,
+      headers: response.headers,
+      statusCode: response.statusCode,
+    };
   }
 
-  const text = await response.body.text();
-
-  if (response.statusCode >= 500) {
-    throw new AppError('İçişleri servisi geçici olarak hata veriyor.', {
-      statusCode: 502,
-      code: 'UPSTREAM_500',
-      details: `status=${response.statusCode}`,
-    });
-  }
-
-  if (response.statusCode >= 300) {
-    throw new AppError('İçişleri servisi isteği yönlendirdi/engelledi.', {
-      statusCode: 502,
-      code: 'UPSTREAM_REDIRECTED',
-      details: `status=${response.statusCode}${response.headers?.location ? `, location=${response.headers.location}` : ''}`,
-    });
-  }
-
-  if (response.statusCode >= 400) {
-    throw new AppError('İçişleri servisi isteği reddetti.', {
-      statusCode: 502,
-      code: 'UPSTREAM_4XX',
-      details: `status=${response.statusCode}`,
-    });
-  }
-
-  return {
-    text,
-    headers: response.headers,
-    statusCode: response.statusCode,
-  };
+  throw new AppError('İçişleri servisine erişilemedi.', {
+    statusCode: 502,
+    code: 'UPSTREAM_UNREACHABLE',
+    details: `attempts=${maxAttempts}, lastStatus=${lastRetryableStatus}, lastError=${lastNetworkErrorMessage}`,
+  });
 };
 
 const requestJson = async (url, options) => {

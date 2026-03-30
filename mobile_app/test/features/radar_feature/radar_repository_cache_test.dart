@@ -8,6 +8,7 @@ class _FakeRemoteDataSource implements RadarRemoteDataSource {
   Future<Map<String, dynamic>> fetchRoute({
     required String fromDistrict,
     required String toDistrict,
+    String? requestId,
   }) async {
     callCount += 1;
 
@@ -86,6 +87,7 @@ class _EmptyRemoteDataSource implements RadarRemoteDataSource {
   Future<Map<String, dynamic>> fetchRoute({
     required String fromDistrict,
     required String toDistrict,
+    String? requestId,
   }) async {
     return {
       'success': false,

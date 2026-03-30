@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import { randomUUID } from 'crypto';
 
 import { env } from './config/env.js';
 import { routeRouter } from './routes/route.js';
@@ -29,6 +30,19 @@ app.use(
 );
 
 app.use(express.json({ limit: '1mb' }));
+
+app.use((req, res, next) => {
+  const incomingRequestId = req.headers['x-request-id'];
+  const requestId =
+    typeof incomingRequestId === 'string' && incomingRequestId.trim().length > 0
+      ? incomingRequestId.trim()
+      : randomUUID();
+
+  req.requestId = requestId;
+  req.requestStartedAt = Date.now();
+  res.setHeader('x-request-id', requestId);
+  next();
+});
 
 app.get('/health', (_req, res) => {
   res.status(200).json({
