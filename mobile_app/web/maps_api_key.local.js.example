@@ -1,0 +1,2 @@
+// Copy this file as maps_api_key.local.js and set your browser-restricted key.
+window.GMAPS_WEB_API_KEY = 'YOUR_BROWSER_RESTRICTED_KEY';
