@@ -1,0 +1,27 @@
+{
+  "name": "antiradar-bff",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "High-performance BFF between Flutter app and İçişleri Bakanlığı route control point API",
+  "main": "src/server.js",
+  "scripts": {
+    "dev": "node --watch src/server.js",
+    "start": "node src/server.js",
+    "test": "node --test",
+    "check": "node --test && node --check src/server.js"
+  },
+  "engines": {
+    "node": ">=20.10.0"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.6.1",
+    "express": "^4.21.2",
+    "helmet": "^8.1.0",
+    "undici": "^7.16.0"
+  },
+  "devDependencies": {
+    "supertest": "^7.1.1"
+  }
+}
