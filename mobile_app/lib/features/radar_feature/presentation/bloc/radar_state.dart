@@ -5,7 +5,7 @@ enum RadarLoadStatus { initial, loading, success, failure }
 class RadarState extends Equatable {
   const RadarState({
     this.status = RadarLoadStatus.initial,
-    this.data = const RadarBundle(radars: [], speedTunnels: []),
+    this.data = const RadarBundle(radars: [], speedTunnels: [], controlPoints: []),
     this.failure,
   });
 

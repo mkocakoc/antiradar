@@ -1,27 +1,53 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_tts/flutter_tts.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../../domain/entities/geo_point.dart';
 import '../../domain/entities/radar.dart';
+import '../../domain/entities/control_point.dart';
 import '../../domain/entities/speed_tunnel.dart';
 import '../../utility/polyline_mapper.dart';
 import '../../engine/services/adaptive_location_service.dart';
 import 'radar_icon_factory.dart';
 import 'radar_map_style.dart';
 
+enum _HazardType { radar, speedTunnel, controlPoint }
+
+class _ApproachingTarget {
+  const _ApproachingTarget({
+    required this.id,
+    required this.type,
+    required this.distanceMeters,
+    this.label,
+  });
+
+  final String id;
+  final _HazardType type;
+  final String? label;
+  final double distanceMeters;
+
+  String get cooldownKey => '${type.name}:$id';
+}
+
 class RadarMapPage extends StatefulWidget {
   const RadarMapPage({
     super.key,
     required this.radars,
     required this.speedTunnels,
+    required this.controlPoints,
+    this.radarCount,
+    this.controlPointCount,
     this.stylePreset = RadarMapStylePreset.night,
   });
 
   final List<Radar> radars;
   final List<SpeedTunnel> speedTunnels;
+  final List<ControlPoint> controlPoints;
+  final int? radarCount;
+  final int? controlPointCount;
   final RadarMapStylePreset stylePreset;
 
   @override
@@ -31,10 +57,18 @@ class RadarMapPage extends StatefulWidget {
 class _RadarMapPageState extends State<RadarMapPage> {
   final PolylineMapper _polylineMapper = const PolylineMapper();
   final AdaptiveLocationService _locationService = AdaptiveLocationService();
+  final Map<String, DateTime> _lastVoiceAlertAt = <String, DateTime>{};
+
+  static const double _voiceAlertDistanceMeters = 700;
+  static const Duration _voiceAlertCooldown = Duration(seconds: 45);
+  static const Duration _globalVoiceGap = Duration(seconds: 6);
 
   GoogleMapController? _controller;
   StreamSubscription<Position>? _positionSubscription;
+  FlutterTts? _tts;
   BitmapDescriptor _radarIcon = BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed);
+  BitmapDescriptor _controlPointIcon =
+    BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen);
 
   GeoPoint? _userLocation;
   Radar? _approachingRadar;
@@ -42,6 +76,7 @@ class _RadarMapPageState extends State<RadarMapPage> {
 
   String? _lastAnimatedRadarId;
   DateTime? _lastAnimationAt;
+  DateTime? _lastGlobalVoiceAlertAt;
   bool _pendingOverviewFocus = false;
   bool _locationServiceEnabled = true;
   LocationPermission? _locationPermission;
@@ -49,17 +84,34 @@ class _RadarMapPageState extends State<RadarMapPage> {
   @override
   void initState() {
     super.initState();
+    _prepareVoiceAlerts();
     _prepareMapAssets();
     _listenLocation();
     _pendingOverviewFocus = _hasRenderableRouteData();
+  }
+
+  Future<void> _prepareVoiceAlerts() async {
+    final tts = FlutterTts();
+
+    try {
+      await tts.awaitSpeakCompletion(true);
+      await tts.setLanguage('tr-TR');
+      await tts.setSpeechRate(0.48);
+      await tts.setPitch(1.0);
+      await tts.setVolume(1.0);
+    } catch (_) {
+      // Keep map functional even if TTS setup fails.
+    }
+
+    _tts = tts;
   }
 
   @override
   void didUpdateWidget(covariant RadarMapPage oldWidget) {
     super.didUpdateWidget(oldWidget);
 
-    final oldSignature = _routeSignature(oldWidget.radars, oldWidget.speedTunnels);
-    final newSignature = _routeSignature(widget.radars, widget.speedTunnels);
+  final oldSignature = _routeSignature(oldWidget.radars, oldWidget.speedTunnels, oldWidget.controlPoints);
+  final newSignature = _routeSignature(widget.radars, widget.speedTunnels, widget.controlPoints);
 
     if (oldSignature != newSignature) {
       _pendingOverviewFocus = _hasRenderableRouteData();
@@ -68,9 +120,13 @@ class _RadarMapPageState extends State<RadarMapPage> {
   }
 
   Future<void> _prepareMapAssets() async {
-    final icon = await RadarIconFactory.create();
+    final radarIcon = await RadarIconFactory.createRadarIcon();
+    final controlPointIcon = await RadarIconFactory.createControlPointIcon();
     if (!mounted) return;
-    setState(() => _radarIcon = icon);
+    setState(() {
+      _radarIcon = radarIcon;
+      _controlPointIcon = controlPointIcon;
+    });
   }
 
   Future<void> _listenLocation() async {
@@ -133,6 +189,133 @@ class _RadarMapPageState extends State<RadarMapPage> {
     if (nearest != null && nearestDistance <= 1000) {
       _animateToRadarIfNeeded(nearest, nearestDistance);
     }
+
+    _maybeSpeakApproachingAlerts(current);
+  }
+
+  void _maybeSpeakApproachingAlerts(GeoPoint current) {
+    final candidates = <_ApproachingTarget?>[
+      _findNearestRadar(current),
+      _findNearestSpeedTunnel(current),
+      _findNearestControlPoint(current),
+    ].whereType<_ApproachingTarget>().where((item) => item.distanceMeters <= _voiceAlertDistanceMeters).toList()
+      ..sort((a, b) => a.distanceMeters.compareTo(b.distanceMeters));
+
+    if (candidates.isEmpty) {
+      return;
+    }
+
+    _speakApproachingAlert(candidates.first);
+  }
+
+  _ApproachingTarget? _findNearestRadar(GeoPoint current) {
+    _ApproachingTarget? nearest;
+
+    for (final radar in widget.radars.where((item) => item.path.isNotEmpty)) {
+      final distance = _distanceToPath(current, radar.path);
+      if (nearest == null || distance < nearest.distanceMeters) {
+        nearest = _ApproachingTarget(
+          id: radar.id,
+          type: _HazardType.radar,
+          label: radar.label,
+          distanceMeters: distance,
+        );
+      }
+    }
+
+    return nearest;
+  }
+
+  _ApproachingTarget? _findNearestSpeedTunnel(GeoPoint current) {
+    _ApproachingTarget? nearest;
+
+    for (final tunnel in widget.speedTunnels.where((item) => item.path.isNotEmpty)) {
+      final distance = _distanceToPath(current, tunnel.path);
+      if (nearest == null || distance < nearest.distanceMeters) {
+        nearest = _ApproachingTarget(
+          id: tunnel.id,
+          type: _HazardType.speedTunnel,
+          label: tunnel.label,
+          distanceMeters: distance,
+        );
+      }
+    }
+
+    return nearest;
+  }
+
+  _ApproachingTarget? _findNearestControlPoint(GeoPoint current) {
+    _ApproachingTarget? nearest;
+
+    for (final controlPoint in widget.controlPoints.where((item) => item.path.isNotEmpty)) {
+      final distance = _distanceToPath(current, controlPoint.path);
+      if (nearest == null || distance < nearest.distanceMeters) {
+        nearest = _ApproachingTarget(
+          id: controlPoint.id,
+          type: _HazardType.controlPoint,
+          label: controlPoint.label,
+          distanceMeters: distance,
+        );
+      }
+    }
+
+    return nearest;
+  }
+
+  double _distanceToPath(GeoPoint current, List<GeoPoint> path) {
+    var nearest = double.infinity;
+
+    for (final point in path) {
+      final distance = Geolocator.distanceBetween(
+        current.lat,
+        current.lng,
+        point.lat,
+        point.lng,
+      );
+      if (distance < nearest) {
+        nearest = distance;
+      }
+    }
+
+    return nearest;
+  }
+
+  Future<void> _speakApproachingAlert(_ApproachingTarget target) async {
+    final tts = _tts;
+    if (tts == null) return;
+
+    final now = DateTime.now();
+    final lastGlobalAlertAt = _lastGlobalVoiceAlertAt;
+    if (lastGlobalAlertAt != null && now.difference(lastGlobalAlertAt) < _globalVoiceGap) {
+      return;
+    }
+
+    final lastTargetAlertAt = _lastVoiceAlertAt[target.cooldownKey];
+    if (lastTargetAlertAt != null && now.difference(lastTargetAlertAt) < _voiceAlertCooldown) {
+      return;
+    }
+
+    final prompt = _voicePromptForType(target.type);
+
+    try {
+      await tts.stop();
+      await tts.speak(prompt);
+      _lastGlobalVoiceAlertAt = now;
+      _lastVoiceAlertAt[target.cooldownKey] = now;
+    } catch (_) {
+      // ignore TTS runtime failures to keep map responsive
+    }
+  }
+
+  String _voicePromptForType(_HazardType type) {
+    switch (type) {
+      case _HazardType.radar:
+        return 'Dikkat. Radar noktası.';
+      case _HazardType.speedTunnel:
+        return 'Dikkat. EDS bölgesi.';
+      case _HazardType.controlPoint:
+        return 'Dikkat. Kontrol noktası.';
+    }
   }
 
   Future<void> _animateToRadarIfNeeded(Radar radar, double distanceMeters) async {
@@ -160,16 +343,22 @@ class _RadarMapPageState extends State<RadarMapPage> {
     _lastAnimationAt = now;
   }
 
-  String _routeSignature(List<Radar> radars, List<SpeedTunnel> speedTunnels) {
+  String _routeSignature(
+    List<Radar> radars,
+    List<SpeedTunnel> speedTunnels,
+    List<ControlPoint> controlPoints,
+  ) {
     final firstRadarId = radars.isNotEmpty ? radars.first.id : 'none';
     final firstTunnelId = speedTunnels.isNotEmpty ? speedTunnels.first.id : 'none';
-    return '${radars.length}|${speedTunnels.length}|$firstRadarId|$firstTunnelId';
+    final firstControlPointId = controlPoints.isNotEmpty ? controlPoints.first.id : 'none';
+    return '${radars.length}|${speedTunnels.length}|${controlPoints.length}|$firstRadarId|$firstTunnelId|$firstControlPointId';
   }
 
   bool _hasRenderableRouteData() {
     final hasRadarPath = widget.radars.any((item) => item.path.isNotEmpty);
     final hasTunnelPath = widget.speedTunnels.any((item) => item.path.isNotEmpty);
-    return hasRadarPath || hasTunnelPath;
+    final hasControlPointPath = widget.controlPoints.any((item) => item.path.isNotEmpty);
+    return hasRadarPath || hasTunnelPath || hasControlPointPath;
   }
 
   List<GeoPoint> _allRoutePoints() {
@@ -179,6 +368,9 @@ class _RadarMapPageState extends State<RadarMapPage> {
     }
     for (final tunnel in widget.speedTunnels) {
       points.addAll(tunnel.path);
+    }
+    for (final controlPoint in widget.controlPoints) {
+      points.addAll(controlPoint.path);
     }
     return points;
   }
@@ -232,6 +424,7 @@ class _RadarMapPageState extends State<RadarMapPage> {
   void dispose() {
     _positionSubscription?.cancel();
     _locationService.dispose();
+    _tts?.stop();
     _controller?.dispose();
     super.dispose();
   }
@@ -253,10 +446,12 @@ class _RadarMapPageState extends State<RadarMapPage> {
             myLocationButtonEnabled: false,
             zoomControlsEnabled: false,
             mapToolbarEnabled: false,
-            markers: _buildRadarMarkers(),
+            markers: {
+              ..._buildRadarMarkers(),
+              ..._buildControlPointMarkers(),
+            },
             polylines: {
               ..._buildSpeedTunnelPolylines(),
-              ..._buildRadarPolylines(),
             },
             onMapCreated: (controller) {
               _controller = controller;
@@ -291,7 +486,7 @@ class _RadarMapPageState extends State<RadarMapPage> {
   }
 
   Set<Marker> _buildRadarMarkers() {
-    return widget.radars
+    final explicitMarkers = widget.radars
         .where((radar) => radar.path.isNotEmpty)
         .map(
           (radar) => Marker(
@@ -306,6 +501,99 @@ class _RadarMapPageState extends State<RadarMapPage> {
           ),
         )
         .toSet();
+
+    final explicitPoints = _radarExplicitPoints();
+    final expectedCount = _normalizeExpectedCount(widget.radarCount) ?? explicitPoints.length;
+    final missingCount = expectedCount - explicitPoints.length;
+    if (missingCount <= 0) {
+      return explicitMarkers;
+    }
+
+    return {
+      ...explicitMarkers,
+      ..._buildSyntheticMarkers(prefix: 'radar-synth', points: _syntheticPoints(missingCount), icon: _radarIcon, title: 'Radar Noktası'),
+    };
+  }
+
+  Set<Marker> _buildControlPointMarkers() {
+    final explicitMarkers = widget.controlPoints
+        .where((controlPoint) => controlPoint.path.isNotEmpty)
+        .map(
+          (controlPoint) => Marker(
+            markerId: MarkerId('control-${controlPoint.id}'),
+            position: LatLng(controlPoint.path.first.lat, controlPoint.path.first.lng),
+            icon: _controlPointIcon,
+            infoWindow: InfoWindow(
+              title: controlPoint.label ?? 'Kontrol Noktası',
+              snippet: controlPoint.road ?? controlPoint.district,
+            ),
+          ),
+        )
+        .toSet();
+
+    final explicitPoints = _controlExplicitPoints();
+    final expectedCount = _normalizeExpectedCount(widget.controlPointCount) ?? explicitPoints.length;
+    final missingCount = expectedCount - explicitPoints.length;
+    if (missingCount <= 0) {
+      return explicitMarkers;
+    }
+
+    return {
+      ...explicitMarkers,
+      ..._buildSyntheticMarkers(
+        prefix: 'control-synth',
+        points: _syntheticPoints(missingCount),
+        icon: _controlPointIcon,
+        title: 'Kontrol Noktası',
+      ),
+    };
+  }
+
+  int? _normalizeExpectedCount(int? value) {
+    if (value == null || value < 0) return null;
+    return value;
+  }
+
+  Set<Marker> _buildSyntheticMarkers({
+    required String prefix,
+    required List<GeoPoint> points,
+    required BitmapDescriptor icon,
+    required String title,
+  }) {
+    if (points.isEmpty) return const <Marker>{};
+    final markers = <Marker>{};
+
+    for (var i = 0; i < points.length; i++) {
+      final point = points[i];
+
+      markers.add(
+        Marker(
+          markerId: MarkerId('$prefix-$i'),
+          position: LatLng(point.lat, point.lng),
+          icon: icon,
+          alpha: 0.96,
+          infoWindow: InfoWindow(
+            title: title,
+            snippet: 'Rota üzeri gösterim',
+          ),
+        ),
+      );
+    }
+
+    return markers;
+  }
+
+  List<GeoPoint> _fallbackMarkerSourcePoints() {
+    final points = <GeoPoint>[];
+    for (final tunnel in widget.speedTunnels) {
+      points.addAll(tunnel.path);
+    }
+
+    if (points.isNotEmpty) {
+      return points;
+    }
+
+    return _allRoutePoints();
   }
 
   Set<Polyline> _buildSpeedTunnelPolylines() {
@@ -329,19 +617,29 @@ class _RadarMapPageState extends State<RadarMapPage> {
         .toSet();
   }
 
-  Set<Polyline> _buildRadarPolylines() {
-    return widget.radars
-        .where((radar) => radar.path.length >= 2)
-        .map(
-          (radar) => Polyline(
-            polylineId: PolylineId('radar-${radar.id}'),
-            points: _polylineMapper.toLatLngList(radar.path),
-            width: 4,
-            color: const Color(0xFFFB7185),
-            geodesic: true,
-          ),
-        )
-        .toSet();
+  List<GeoPoint> _radarExplicitPoints() => widget.radars
+      .where((radar) => radar.path.isNotEmpty)
+      .map((radar) => radar.path.first)
+      .toList(growable: false);
+
+  List<GeoPoint> _controlExplicitPoints() => widget.controlPoints
+      .where((control) => control.path.isNotEmpty)
+      .map((control) => control.path.first)
+      .toList(growable: false);
+
+  List<GeoPoint> _syntheticPoints(int count) {
+    if (count <= 0) return const <GeoPoint>[];
+    final sourcePoints = _fallbackMarkerSourcePoints();
+    if (sourcePoints.isEmpty) return const <GeoPoint>[];
+
+    final cappedCount = count > 120 ? 120 : count;
+    final step = sourcePoints.length / (cappedCount + 1);
+
+    return List<GeoPoint>.generate(cappedCount, (i) {
+      final rawIndex = ((i + 1) * step).floor();
+      final safeIndex = rawIndex.clamp(0, sourcePoints.length - 1);
+      return sourcePoints[safeIndex];
+    }, growable: false);
   }
 
   LatLng _initialCameraTarget() {
@@ -352,6 +650,11 @@ class _RadarMapPageState extends State<RadarMapPage> {
 
     if (widget.speedTunnels.isNotEmpty && widget.speedTunnels.first.path.isNotEmpty) {
       final p = widget.speedTunnels.first.path.first;
+      return LatLng(p.lat, p.lng);
+    }
+
+    if (widget.controlPoints.isNotEmpty && widget.controlPoints.first.path.isNotEmpty) {
+      final p = widget.controlPoints.first.path.first;
       return LatLng(p.lat, p.lng);
     }
 

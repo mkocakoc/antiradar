@@ -7,45 +7,81 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 class RadarIconFactory {
   const RadarIconFactory._();
 
-  static Future<BitmapDescriptor> create({
+  static Future<BitmapDescriptor> createRadarIcon({
     Color color = const Color(0xFFEF4444),
-    int size = 120,
+    int size = 76,
+  }) async {
+    return _createCircularIcon(
+      color: color,
+      size: size,
+      iconData: Icons.notification_important_rounded,
+      withPulse: true,
+      fallbackHue: BitmapDescriptor.hueRed,
+    );
+  }
+
+  static Future<BitmapDescriptor> createControlPointIcon({
+    Color color = const Color(0xFF22C55E),
+    int size = 76,
+  }) async {
+    return _createCircularIcon(
+      color: color,
+      size: size,
+      iconData: Icons.local_police_rounded,
+      withPulse: false,
+      fallbackHue: BitmapDescriptor.hueGreen,
+    );
+  }
+
+  static Future<BitmapDescriptor> _createCircularIcon({
+    required Color color,
+    required int size,
+    required IconData iconData,
+    required bool withPulse,
+    required double fallbackHue,
   }) async {
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(recorder);
     final center = Offset(size / 2, size / 2);
 
-    final pulsePaint = Paint()
-      ..color = color.withValues(alpha: 0.20)
-      ..style = PaintingStyle.fill;
+    if (withPulse) {
+      final pulsePaint = Paint()
+        ..color = color.withValues(alpha: 0.20)
+        ..style = PaintingStyle.fill;
 
-    final middlePulsePaint = Paint()
-      ..color = color.withValues(alpha: 0.35)
-      ..style = PaintingStyle.fill;
+      final middlePulsePaint = Paint()
+        ..color = color.withValues(alpha: 0.35)
+        ..style = PaintingStyle.fill;
+
+      canvas.drawCircle(center, size * 0.45, pulsePaint);
+      canvas.drawCircle(center, size * 0.32, middlePulsePaint);
+    }
 
     final corePaint = Paint()
       ..color = color
       ..style = PaintingStyle.fill;
 
-    canvas.drawCircle(center, size * 0.45, pulsePaint);
-    canvas.drawCircle(center, size * 0.32, middlePulsePaint);
     canvas.drawCircle(center, size * 0.16, corePaint);
 
-    final crossPaint = Paint()
-      ..color = Colors.white
-      ..strokeWidth = size * 0.04
-      ..strokeCap = StrokeCap.round;
+    final textPainter = TextPainter(
+      textDirection: TextDirection.ltr,
+      text: TextSpan(
+        text: String.fromCharCode(iconData.codePoint),
+        style: TextStyle(
+          fontSize: size * 0.22,
+          fontFamily: iconData.fontFamily,
+          package: iconData.fontPackage,
+          color: Colors.white,
+        ),
+      ),
+    )..layout();
 
-    canvas.drawLine(
-      Offset(center.dx, center.dy - size * 0.10),
-      Offset(center.dx, center.dy + size * 0.10),
-      crossPaint,
-    );
-
-    canvas.drawLine(
-      Offset(center.dx - size * 0.10, center.dy),
-      Offset(center.dx + size * 0.10, center.dy),
-      crossPaint,
+    textPainter.paint(
+      canvas,
+      Offset(
+        center.dx - textPainter.width / 2,
+        center.dy - textPainter.height / 2,
+      ),
     );
 
     final picture = recorder.endRecording();
@@ -53,7 +89,7 @@ class RadarIconFactory {
     final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
 
     if (bytes == null) {
-      return BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed);
+      return BitmapDescriptor.defaultMarkerWithHue(fallbackHue);
     }
 
     return BitmapDescriptor.bytes(Uint8List.view(bytes.buffer));

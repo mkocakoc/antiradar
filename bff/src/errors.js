@@ -11,8 +11,10 @@ export class AppError extends Error {
 export const buildEmptyState = () => ({
   speedTunnels: [],
   radars: [],
+  controlPoints: [],
   summary: {
     speedTunnelCount: 0,
     radarCount: 0,
+    controlPointCount: 0,
   },
 });

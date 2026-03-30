@@ -1,6 +1,7 @@
 export 'domain/entities/geo_point.dart';
 export 'domain/entities/radar.dart';
 export 'domain/entities/radar_bundle.dart';
+export 'domain/entities/control_point.dart';
 export 'domain/entities/speed_tunnel.dart';
 export 'domain/failures/radar_failure.dart';
 export 'domain/repositories/radar_repository.dart';

@@ -19,6 +19,7 @@ const logRouteTelemetry = ({
   toDistrict,
   radarCount,
   speedTunnelCount,
+  controlPointCount,
   errorCode,
 }) => {
   emitLog({
@@ -30,6 +31,7 @@ const logRouteTelemetry = ({
     toDistrict,
     radarCount,
     speedTunnelCount,
+    controlPointCount,
     errorCode,
   });
 };
@@ -90,8 +92,17 @@ routeRouter.post('/route', async (req, res, next) => {
     });
 
     const transformed = transformRouteResponse(rawResponse);
+    const summary = transformed.summary ?? {
+      radarCount: transformed.radars.length,
+      speedTunnelCount: transformed.speedTunnels.length,
+      controlPointCount: transformed.controlPoints.length,
+    };
 
-    if (!transformed.speedTunnels.length && !transformed.radars.length) {
+    if (
+      (summary.speedTunnelCount ?? 0) === 0 &&
+      (summary.radarCount ?? 0) === 0 &&
+      (summary.controlPointCount ?? 0) === 0
+    ) {
       logRouteTelemetry({
         requestId: req.requestId,
         durationMs: Date.now() - (req.requestStartedAt ?? Date.now()),
@@ -100,6 +111,7 @@ routeRouter.post('/route', async (req, res, next) => {
         toDistrict,
         radarCount: 0,
         speedTunnelCount: 0,
+        controlPointCount: 0,
         errorCode: 'EMPTY_DATA',
       });
 
@@ -107,7 +119,7 @@ routeRouter.post('/route', async (req, res, next) => {
         success: false,
         error: {
           code: 'EMPTY_DATA',
-          message: 'Seçilen güzergah için radar veya hız tüneli verisi bulunamadı.',
+          message: 'Seçilen güzergah için radar, hız tüneli veya kontrol noktası verisi bulunamadı.',
           details: {
             fromDistrict,
             toDistrict,
@@ -126,6 +138,8 @@ routeRouter.post('/route', async (req, res, next) => {
       radarCount: transformed.summary?.radarCount ?? transformed.radars.length,
       speedTunnelCount:
         transformed.summary?.speedTunnelCount ?? transformed.speedTunnels.length,
+      controlPointCount:
+        transformed.summary?.controlPointCount ?? transformed.controlPoints.length,
       errorCode: null,
     });
 

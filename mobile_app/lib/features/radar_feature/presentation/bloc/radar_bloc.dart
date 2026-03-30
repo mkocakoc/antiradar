@@ -63,7 +63,7 @@ class RadarBloc extends Bloc<RadarEvent, RadarState> {
           state.copyWith(
             status: RadarLoadStatus.failure,
             failure: failure,
-            data: const RadarBundle(radars: [], speedTunnels: []),
+            data: const RadarBundle(radars: [], speedTunnels: [], controlPoints: []),
           ),
         );
       },
@@ -77,8 +77,9 @@ class RadarBloc extends Bloc<RadarEvent, RadarState> {
           durationMs: durationMs,
           resultType: data.isEmpty ? 'empty' : 'success',
           requestId: requestId,
-          radarCount: data.radars.length,
-          speedTunnelCount: data.speedTunnels.length,
+          radarCount: data.effectiveRadarCount,
+          speedTunnelCount: data.effectiveSpeedTunnelCount,
+          controlPointCount: data.effectiveControlPointCount,
         );
 
         emit(
@@ -102,6 +103,7 @@ class RadarBloc extends Bloc<RadarEvent, RadarState> {
     String? resultType,
     int? radarCount,
     int? speedTunnelCount,
+    int? controlPointCount,
     String? errorCode,
     String? errorMessage,
   }) {
@@ -115,6 +117,7 @@ class RadarBloc extends Bloc<RadarEvent, RadarState> {
       if (resultType != null) 'resultType': resultType,
       if (radarCount != null) 'radarCount': radarCount,
       if (speedTunnelCount != null) 'speedTunnelCount': speedTunnelCount,
+      if (controlPointCount != null) 'controlPointCount': controlPointCount,
       if (errorCode != null) 'errorCode': errorCode,
       if (errorMessage != null) 'errorMessage': errorMessage,
     };

@@ -12,6 +12,13 @@ const toNumber = (value) => {
   return null;
 };
 
+const normalizeCount = (value) => {
+  const num = toNumber(value);
+  if (num === null) return null;
+  const rounded = Math.round(num);
+  return rounded >= 0 ? rounded : null;
+};
+
 const normalizeCoordinate = (point) => {
   if (!point || typeof point !== 'object') {
     return null;
@@ -59,6 +66,14 @@ const mapControlPoint = (item, type) => {
 export const transformRouteResponse = (raw) => {
   const speedTunnelsRaw = pickArray(raw?.SpeedTunnels, raw?.speedTunnels, raw?.data?.SpeedTunnels);
   const radarsRaw = pickArray(raw?.Radars, raw?.radars, raw?.data?.Radars);
+  const controlPointsRaw = pickArray(
+    raw?.ControlPoints,
+    raw?.controlPoints,
+    raw?.ControlPoint,
+    raw?.controlPoint,
+    raw?.data?.ControlPoints,
+    raw?.data?.controlPoints,
+  );
 
   const speedTunnels = speedTunnelsRaw
     .map((item) => mapControlPoint(item, 'speed_tunnel'))
@@ -68,12 +83,31 @@ export const transformRouteResponse = (raw) => {
     .map((item) => mapControlPoint(item, 'radar'))
     .filter((item) => item.pathPointCount > 0);
 
+  const controlPoints = controlPointsRaw
+    .map((item) => mapControlPoint(item, 'control_point'))
+    .filter((item) => item.pathPointCount > 0);
+
+  const rawSpeedTunnelCount =
+    normalizeCount(raw?.CorridorCount ?? raw?.corridorCount ?? raw?.data?.CorridorCount) ??
+    speedTunnels.length;
+  const rawRadarCount =
+    normalizeCount(raw?.RadarCount ?? raw?.radarCount ?? raw?.data?.RadarCount) ?? radars.length;
+  const rawControlPointCount =
+    normalizeCount(
+      raw?.ControlPointCount ??
+        raw?.controlPointCount ??
+        raw?.data?.ControlPointCount ??
+        raw?.data?.controlPointCount,
+    ) ?? controlPoints.length;
+
   return {
     speedTunnels,
     radars,
+    controlPoints,
     summary: {
-      speedTunnelCount: speedTunnels.length,
-      radarCount: radars.length,
+      speedTunnelCount: rawSpeedTunnelCount,
+      radarCount: rawRadarCount,
+      controlPointCount: rawControlPointCount,
     },
   };
 };

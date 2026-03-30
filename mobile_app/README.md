@@ -87,6 +87,9 @@ Success response (özet):
     ],
     "speedTunnels": [
       { "id": "s1", "path": [{ "lat": 39.8, "lng": 32.7 }] }
+    ],
+    "controlPoints": [
+      { "id": "c1", "path": [{ "lat": 39.85, "lng": 32.75 }] }
     ]
   }
 }

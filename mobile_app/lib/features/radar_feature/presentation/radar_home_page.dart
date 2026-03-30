@@ -349,7 +349,8 @@ class _RadarHomePageState extends State<RadarHomePage> {
       builder: (context, state) {
         if (state.status == RadarLoadStatus.loading &&
             state.data.radars.isEmpty &&
-            state.data.speedTunnels.isEmpty) {
+            state.data.speedTunnels.isEmpty &&
+            state.data.controlPoints.isEmpty) {
           return const Scaffold(
             body: Center(child: CircularProgressIndicator.adaptive()),
           );
@@ -361,6 +362,9 @@ class _RadarHomePageState extends State<RadarHomePage> {
               stylePreset: RadarMapStylePreset.night,
               radars: state.data.radars,
               speedTunnels: state.data.speedTunnels,
+              controlPoints: state.data.controlPoints,
+              radarCount: state.data.effectiveRadarCount,
+              controlPointCount: state.data.effectiveControlPointCount,
             ),
             SafeArea(
               child: Align(
@@ -517,13 +521,19 @@ class _RadarHomePageState extends State<RadarHomePage> {
                                     ),
                                     const SizedBox(width: 8),
                                     _buildCountBadge(
-                                      label: '${state.data.speedTunnels.length} EDS/Koridor',
+                                      label: '${state.data.effectiveSpeedTunnelCount} EDS/Koridor',
                                       color: const Color(0xFF0EA5E9),
                                       onTap: () => setState(() => _isRoutePanelExpanded = true),
                                     ),
                                     const SizedBox(width: 6),
                                     _buildCountBadge(
-                                      label: '${state.data.radars.length} Radar',
+                                      label: '${state.data.effectiveControlPointCount} Kontrol',
+                                      color: const Color(0xFF22C55E),
+                                      onTap: () => setState(() => _isRoutePanelExpanded = true),
+                                    ),
+                                    const SizedBox(width: 6),
+                                    _buildCountBadge(
+                                      label: '${state.data.effectiveRadarCount} Radar',
                                       color: const Color(0xFFFB7185),
                                       onTap: () => setState(() => _isRoutePanelExpanded = true),
                                     ),
@@ -602,17 +612,18 @@ class _RadarHomePageState extends State<RadarHomePage> {
     }
 
     if (state.status == RadarLoadStatus.success) {
-      final tunnelCount = state.data.speedTunnels.length;
-      final radarCount = state.data.radars.length;
+      final tunnelCount = state.data.effectiveSpeedTunnelCount;
+      final radarCount = state.data.effectiveRadarCount;
+      final controlPointCount = state.data.effectiveControlPointCount;
 
-      if (radarCount == 0 && tunnelCount > 0) {
+      if (radarCount == 0 && tunnelCount > 0 && controlPointCount == 0) {
         return Text(
           'Sonuç: $tunnelCount EDS/hız koridoru bulundu, radar noktası bulunamadı.',
           style: const TextStyle(color: Color(0xFFFCD34D), fontWeight: FontWeight.w600),
         );
       }
 
-      if (radarCount > 0 && tunnelCount == 0) {
+      if (radarCount > 0 && tunnelCount == 0 && controlPointCount == 0) {
         return Text(
           'Sonuç: $radarCount radar noktası bulundu, EDS/hız koridoru bulunamadı.',
           style: const TextStyle(color: Color(0xFF86EFAC), fontWeight: FontWeight.w600),
@@ -620,7 +631,7 @@ class _RadarHomePageState extends State<RadarHomePage> {
       }
 
       return Text(
-        'Sonuç: $tunnelCount EDS/hız koridoru, $radarCount radar noktası',
+        'Sonuç: $tunnelCount EDS/hız koridoru, $radarCount radar noktası, $controlPointCount kontrol noktası',
         style: const TextStyle(color: Color(0xFF86EFAC), fontWeight: FontWeight.w600),
       );
     }

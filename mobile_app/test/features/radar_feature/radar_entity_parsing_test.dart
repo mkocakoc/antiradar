@@ -38,12 +38,42 @@ void main() {
               {'x': 29.0, 'y': 39.0}
             ]
           }
-        ]
+        ],
+        'controlPoints': [
+          {
+            'id': 'c1',
+            'path': [
+              {'x': 31.0, 'y': 38.0}
+            ]
+          }
+        ],
       }
     });
 
     expect(bundle.isEmpty, isFalse);
     expect(bundle.radars.length, 1);
     expect(bundle.speedTunnels.length, 1);
+    expect(bundle.controlPoints.length, 1);
+  });
+
+  test('RadarBundle.fromBackendJson should respect summary/count fields when arrays are empty', () {
+    final bundle = RadarBundle.fromBackendJson({
+      'success': true,
+      'data': {
+        'RadarCount': 19,
+        'ControlPointCount': 47,
+        'CorridorCount': 59,
+        'Radars': [],
+        'SpeedTunnels': [],
+      },
+    });
+
+    expect(bundle.radars.length, 0);
+    expect(bundle.speedTunnels.length, 0);
+    expect(bundle.controlPoints.length, 0);
+    expect(bundle.effectiveRadarCount, 19);
+    expect(bundle.effectiveControlPointCount, 47);
+    expect(bundle.effectiveSpeedTunnelCount, 59);
+    expect(bundle.isEmpty, isFalse);
   });
 }
