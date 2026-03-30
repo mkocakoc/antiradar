@@ -38,11 +38,3 @@ Bu repository açık kaynak olarak lisanslanmamıştır.
 Özetle: kodun tüm hakları saklıdır (All Rights Reserved). Ürünleştirme,
 ticari kullanım, dağıtım veya gelir elde etmeye yönelik kullanım için yazılı
 ticari lisans gerekir.
-
-## Sonraki Adım
-Bir sonraki promptta şu bilgileri paylaşmanla doğrudan kod tarafına geçebiliriz:
-- İçişleri API endpoint listesi
-- Kimlik doğrulama yöntemi (API key, OAuth2, JWT vs.)
-- Örnek request/response payload
-- Radar kodlarının anlamları
-- Bildirim kuralları (kaç metre kala, hangi kodlarda uyarı)
