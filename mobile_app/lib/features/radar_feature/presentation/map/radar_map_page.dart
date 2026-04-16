@@ -425,7 +425,7 @@ class _RadarMapPageState extends State<RadarMapPage> {
     _positionSubscription?.cancel();
     _locationService.dispose();
     _tts?.stop();
-    _controller?.dispose();
+    _controller = null;
     super.dispose();
   }
 

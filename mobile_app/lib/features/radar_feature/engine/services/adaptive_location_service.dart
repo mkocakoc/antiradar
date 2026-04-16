@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 
 class AdaptiveLocationService {
@@ -85,6 +86,13 @@ class AdaptiveLocationService {
   LocationSettings _buildLocationSettings(int distanceFilter) {
     if (_baseSettings != null) {
       return _baseSettings;
+    }
+
+    if (kIsWeb) {
+      return LocationSettings(
+        accuracy: LocationAccuracy.high,
+        distanceFilter: distanceFilter,
+      );
     }
 
     if (Platform.isAndroid) {

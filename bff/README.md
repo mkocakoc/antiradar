@@ -25,6 +25,30 @@ npm run dev
 npm test
 ```
 
+## Docker ile Çalıştırma (Production)
+
+Image build:
+
+```bash
+docker build -t antiradar-bff:latest .
+```
+
+Container run:
+
+```bash
+docker run --rm -p 3000:3000 \
+  -e NODE_ENV=production \
+  -e PORT=3000 \
+  -e ICISLERI_ROUTE_URL=https://www.icisleri.gov.tr/ISAYWebPart/PolGenControlPointV2/CreateRoute \
+  antiradar-bff:latest
+```
+
+Health check:
+
+```bash
+curl http://localhost:3000/health
+```
+
 ## İstek Örneği
 `POST /api/route`
 
